@@ -237,7 +237,7 @@ int64_t p_timeval_diffms(const timeval& tv1, const timeval& tv2)
 {
 	int64_t tv1Ms = (tv1.tv_sec * 1000 + tv1.tv_usec/1000);
 	int64_t tv2Ms = (tv2.tv_sec * 1000 + tv2.tv_usec/1000);
-	return 	tv2Ms - tv1Ms;
+	return tv1Ms - tv2Ms;
 }
 
 void timer_text(const char* szFormat, const struct timeval* tv, char* buf, size_t size)
@@ -835,7 +835,8 @@ void LiveMediaModuleContext::streamCheckAliveHandler(CustomRTSPClient* rtspClien
 	timeval tvNow;
 	gettimeofday(&tvNow, NULL);
 
-	if(p_timeval_diffms(tvNow, m_tvLastPacket) > 30000)
+	int64_t iDiffMs = p_timeval_diffms(tvNow, m_tvLastPacket);
+	if(iDiffMs > 30000)
 	{
 		m_bError = true; // Timeout is an error
 		p_log("[Access::livemedia] No data received in the last %d ms", 30000);
