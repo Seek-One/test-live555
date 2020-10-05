@@ -6,6 +6,7 @@
  */
 
 #include <stdarg.h>
+#include <time.h>
 #include <sys/time.h>
 
 #include <liveMedia_version.hh>
@@ -26,6 +27,7 @@ unsigned increaseReceiveBufferTo(UsageEnvironment& env, int socket, unsigned req
 char* p_strconcat(const char* str1, ...);
 void p_log(const char* format, ...);
 int64_t p_timeval_diffms(const timeval& tv1, const timeval& tv2);
+void timer_text(const char* szFormat, const struct timeval* tv, char* buf, size_t size);
 
 #define timercpy(dst, src) \
 		(dst)->tv_sec = (src)->tv_sec; \
@@ -216,12 +218,19 @@ char* p_strconcat(const char* str1, ...)
 
 void p_log(const char* format, ...)
 {
+	timeval tvNow;
+	gettimeofday(&tvNow, NULL);
+	char szBufTime[50];
+	timer_text("%Y-%m-%d %H:%M:%S", &tvNow, szBufTime, 50);
+	fprintf(stderr, "[%s] ", szBufTime);
+
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
-	fprintf(stderr, "\n");
 	fflush(stderr);
 	va_end(args);
+
+	fprintf(stderr, "\n");
 }
 
 int64_t p_timeval_diffms(const timeval& tv1, const timeval& tv2)
@@ -229,6 +238,16 @@ int64_t p_timeval_diffms(const timeval& tv1, const timeval& tv2)
 	int64_t tv1Ms = (tv1.tv_sec * 1000 + tv1.tv_usec/1000);
 	int64_t tv2Ms = (tv2.tv_sec * 1000 + tv2.tv_usec/1000);
 	return 	tv2Ms - tv1Ms;
+}
+
+void timer_text(const char* szFormat, const struct timeval* tv, char* buf, size_t size)
+{
+	char tmbuf[64];
+	struct tm time_tm;
+	time_t tmpTime = tv->tv_sec;
+	localtime_r(&tmpTime, &time_tm);
+	strftime(tmbuf, sizeof(tmbuf), szFormat, &time_tm);
+	snprintf(buf, size, "%s,%06ld", tmbuf, (long)tv->tv_usec);
 }
 
 //////////////////////////////////
