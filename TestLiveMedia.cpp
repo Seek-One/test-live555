@@ -128,6 +128,7 @@ public:
 	LiveMediaModuleContext(int iVerbosityLevel);
 	virtual ~LiveMediaModuleContext();
 	void reset();
+	void setWithPingOptions(bool bEnable);
 	void cleanSesssion();
 	void continueAfterOPTIONS(RTSPClient* rtspClient, int resultCode, char* resultString);
 	void handlePingWithOPTIONS(RTSPClient* rtspClient, int resultCode, char* resultString);
@@ -164,6 +165,8 @@ public:
 	bool m_bVerbose;
 
 	timeval m_tvLastPacket;
+
+	bool m_bWithPingOptions;
 };
 
 
@@ -541,6 +544,7 @@ LiveMediaModuleContext::LiveMediaModuleContext(int iVerbosityLevel)
 	m_duration = 0;
 	m_bError = false;
 	timerclear(&m_tvLastPacket);
+	m_bWithPingOptions = true;
 }
 
 LiveMediaModuleContext::~LiveMediaModuleContext()
@@ -561,6 +565,11 @@ void LiveMediaModuleContext::reset()
 	m_duration = 0;
 	timerclear(&m_tvLastPacket);
 	p_log("[Access::livemedia] Reseting done");
+}
+
+void LiveMediaModuleContext::setWithPingOptions(bool bEnable)
+{
+	m_bWithPingOptions = bEnable;
 }
 
 void LiveMediaModuleContext::cleanSesssion()
@@ -846,7 +855,9 @@ void LiveMediaModuleContext::streamCheckAliveHandler(CustomRTSPClient* rtspClien
 	}else{
         // Some stream have a session timeout, so we need to send a command to tell we are alive
 		// Axis camera with firmware >= 5.60
-		m_pRtspClient->sendOptionsCommand(CustomRTSPClient::handlePingWithOPTIONS);
+		if(m_bWithPingOptions){
+			m_pRtspClient->sendOptionsCommand(CustomRTSPClient::handlePingWithOPTIONS);
+		}
 
 		m_streamCheckAliveTask = m_env->taskScheduler().scheduleDelayedTask(TIMEOUT_CHECKALIVE, (TaskFunc*)CustomRTSPClient::streamCheckAliveHandler, rtspClient);
 	}
@@ -953,6 +964,7 @@ int main (int argc, char *argv[])
 	const char* szPassword = NULL;
 	bool bTCP = false;
 	int iVerbosityLevel = 0;
+	bool bWithPing = true;
 
 	for(int i=0; i<argc; i++)
 	{
@@ -985,6 +997,10 @@ int main (int argc, char *argv[])
 			iVerbosityLevel = 1;
 			continue;
 		}
+		if(strcmp(argv[i], "--no-ping") == 0){
+			bWithPing = false;
+			continue;
+		}
 		if(i == argc-1){
 			szRTSPUrl = argv[i];
 		}
@@ -994,6 +1010,7 @@ int main (int argc, char *argv[])
 
 	// Initiate context
 	LiveMediaModuleContext* pContext = new LiveMediaModuleContext(iVerbosityLevel);
-	pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);	
+	pContext->setWithPingOptions(bWithPing);
+	pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);
 }
 
