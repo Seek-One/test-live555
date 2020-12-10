@@ -1005,7 +1005,7 @@ int main (int argc, char *argv[])
 			continue;
 		}
 		if(strcmp(argv[i], "--retry") == 0){
-			bRetry = false;
+			bRetry = true;
 			continue;
 		}
 		if(i == argc-1){
