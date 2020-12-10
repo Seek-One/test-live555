@@ -219,13 +219,15 @@ char* p_strconcat(const char* str1, ...)
 	return szResult;
 }
 
+static int g_iAttempt = 0;
+
 void p_log(const char* format, ...)
 {
 	timeval tvNow;
 	gettimeofday(&tvNow, NULL);
 	char szBufTime[50];
 	timer_text("%Y-%m-%d %H:%M:%S", &tvNow, szBufTime, 50);
-	fprintf(stderr, "[%s] ", szBufTime);
+	fprintf(stderr, "[%s::%d] ", szBufTime, g_iAttempt);
 
 	va_list args;
 	va_start(args, format);
@@ -1011,10 +1013,13 @@ int main (int argc, char *argv[])
 		}
 	}
 
+	g_iAttempt = 0;
+
 	p_log("[Access::livemedia] RTSP %s, %s, %s", szRTSPUrl, szUsername, szPassword);
 
 	// Initiate context
 	while(true){
+		g_iAttempt++;
 		LiveMediaModuleContext* pContext = new LiveMediaModuleContext(iVerbosityLevel);
 		pContext->setWithPingOptions(bWithPing);
 		pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);
