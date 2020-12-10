@@ -965,6 +965,7 @@ int main (int argc, char *argv[])
 	bool bTCP = false;
 	int iVerbosityLevel = 0;
 	bool bWithPing = true;
+	bool bRetry = false;
 
 	for(int i=0; i<argc; i++)
 	{
@@ -1001,6 +1002,10 @@ int main (int argc, char *argv[])
 			bWithPing = false;
 			continue;
 		}
+		if(strcmp(argv[i], "--retry") == 0){
+			bRetry = false;
+			continue;
+		}
 		if(i == argc-1){
 			szRTSPUrl = argv[i];
 		}
@@ -1009,8 +1014,13 @@ int main (int argc, char *argv[])
 	p_log("[Access::livemedia] RTSP %s, %s, %s", szRTSPUrl, szUsername, szPassword);
 
 	// Initiate context
-	LiveMediaModuleContext* pContext = new LiveMediaModuleContext(iVerbosityLevel);
-	pContext->setWithPingOptions(bWithPing);
-	pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);
+	while(true){
+		LiveMediaModuleContext* pContext = new LiveMediaModuleContext(iVerbosityLevel);
+		pContext->setWithPingOptions(bWithPing);
+		pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);
+		if(!bRetry){
+			break;
+		}
+	}
 }
 
