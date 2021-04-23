@@ -91,6 +91,8 @@ private:
 	LiveMediaModuleContext* m_pLiveMediaModuleContext;
 	u_int8_t* m_pReceiveBuffer;
 	MediaSubsession& m_mediaSubSession;
+
+	struct timeval m_tvLastPresentationTime;
 };
 
 /////////////////////////////////////////////
@@ -342,6 +344,8 @@ DummySink::DummySink(LiveMediaModuleContext* pLiveMediaModuleContext)
 	m_pLiveMediaModuleContext = pLiveMediaModuleContext;
 
 	m_pReceiveBuffer = new u_int8_t[DUMMY_SINK_RECEIVE_BUFFER_SIZE];
+
+	timerclear(&m_tvLastPresentationTime);
 }
 
 DummySink::~DummySink()
@@ -361,12 +365,36 @@ void DummySink::afterGettingFrame(void* clientData, unsigned frameSize, unsigned
 
 void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes, struct timeval presentationTime, unsigned /*durationInMicroseconds*/)
 {
+	struct timeval tvDiff;
+
+	// Compute last packet time diff
+	timerclear(&tvDiff);
+	if(timerisset(&m_tvLastPresentationTime)){
+		timersub(&presentationTime, &m_tvLastPresentationTime, &tvDiff);
+	}
+	timercpy(&m_tvLastPresentationTime, &presentationTime);
+
 	if(m_pLiveMediaModuleContext->m_iVerbosityLevel >= 3){
-		envir() << m_mediaSubSession.mediumName() << "/" << m_mediaSubSession.codecName() << ":\tReceived " << frameSize << " bytes";
-		if (numTruncatedBytes > 0) envir() << " (with " << numTruncatedBytes << " bytes truncated)";
+		// Data type
+		envir() << m_mediaSubSession.mediumName() << "/" << m_mediaSubSession.codecName() << ":";
+
+		// Bytes received
+		envir() << "\tReceived " << frameSize << " bytes";
+		if (numTruncatedBytes > 0){
+			envir() << " (with " << numTruncatedBytes << " bytes truncated)";
+		}
+
 		char uSecsStr[6+1];
+
+		// Presentation time
 		sprintf(uSecsStr, "%06u", (unsigned)presentationTime.tv_usec);
 		envir() << ".\tPresentation time: " << (int)presentationTime.tv_sec << "." << uSecsStr;
+
+		// Presentation time diff
+		int64_t iDiffMs =  (tvDiff.tv_sec*1000) + (tvDiff.tv_usec / 1000);
+		envir() << " (+" << (int)iDiffMs << " ms)";
+
+		// Is synchronized using RTCP
 		if (m_mediaSubSession.rtpSource() != NULL && !m_mediaSubSession.rtpSource()->hasBeenSynchronizedUsingRTCP()) {
 			envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
 		}
