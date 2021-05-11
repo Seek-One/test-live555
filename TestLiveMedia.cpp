@@ -19,6 +19,7 @@
 unsigned increaseReceiveBufferTo(UsageEnvironment& env, int socket, unsigned requestedSize);
 
 #define TIMEOUT_CHECKALIVE 10000000
+#define DEBUG_PRINT_NPT 1
 
 /////////////////////////////////
 // Utility function declaration
@@ -400,9 +401,8 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
 		}
 	#ifdef DEBUG_PRINT_NPT
 		envir() << "\tNPT: " << m_mediaSubSession.getNormalPlayTime(presentationTime);
-	#else
-		envir() << "\n";
 	#endif
+		envir() << "\n";
 	}
 	bool bRes = true;
 
@@ -472,7 +472,7 @@ void CustomBasicUsageEnvironment::printOutput()
 
 			while(szLine != NULL)
 			{
-				iLen = strlen(m_szCurMsg);
+				iLen = strlen(szLine);
 				if(szLine[iLen-1] == '\r'){
 					p_log("[LibLiveMedia] %.*s", iLen-1, szLine);
 				}else{
