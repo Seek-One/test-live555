@@ -4,7 +4,7 @@
 
 ```
 apt install git gcc liblivemedia-dev pkg-config
-git clone https://github.com/Jet1oeil/test-live555.git
+git clone https://github.com/Seek-One/test-live555.git
 cd test-live555
 make
 ./TestLiveMedia --username admin --password password --tcp -vvv rtsp://192.168.5.60/onvif/profile2/media.smp
@@ -29,10 +29,12 @@ chmod a+w /opt/livemedia
 make install PREFIX=/opt/livemedia/
 ```
 
+If compilation error, edit config.linux and add -DNO_STD_LIB in COMPILE_OPTS. Then restart from "genMakefiles".
+
 Program compilation :
 
 ```
-apt install git gcc liblivemedia-dev pkg-config
+apt install git gcc pkg-config
 git clone https://github.com/Jet1oeil/test-live555.git
 cd test-live555
 make -f Makefile.custom
