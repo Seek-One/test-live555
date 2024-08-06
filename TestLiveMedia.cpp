@@ -59,6 +59,7 @@ public:
 	static void handlePingWithOPTIONS(RTSPClient* rtspClient, int resultCode, char* resultString);
 	static void subsessionAfterPlaying(void* clientData);
 	static void subsessionByeHandler(void* clientData);
+	static void streamCheckStreamInitializedHandler(void* clientData);
 	static void streamCheckAliveHandler(void* clientData);
 	static void streamTimerHandler(void* clientData);
 
@@ -141,6 +142,7 @@ public:
 	void continueAfterPLAY(RTSPClient* rtspClient, int resultCode, char* resultString);
 	void subsessionAfterPlaying(RTSPClient* rtspClient, MediaSubsession* subsession);
 	void subsessionByeHandler(RTSPClient* rtspClient, MediaSubsession* subsession);
+	void streamCheckStreamInitializedHandler(CustomRTSPClient* rtspClient);
 	void streamCheckAliveHandler(CustomRTSPClient* rtspClient);
 	void streamTimerHandler(CustomRTSPClient* rtspClient);
 	void shutdownStream(RTSPClient* rtspClient);
@@ -158,6 +160,7 @@ public:
 	MediaSession* m_pMediaSession;
 	MediaSubsessionIterator* m_pMediaSubsessionIterator;
 	MediaSubsession* m_pMediaSubsession;
+	TaskToken m_streamInitializedTask;
 	TaskToken m_streamTimerTask;
 	TaskToken m_streamCheckAliveTask;
 	double m_duration;
@@ -166,6 +169,8 @@ public:
 
 	int m_iVerbosityLevel;
 	bool m_bVerbose;
+
+	bool m_bStreamInitialized;
 
 	timeval m_tvLastPacket;
 
@@ -318,6 +323,11 @@ void CustomRTSPClient::subsessionByeHandler(void* clientData)
 	MediaSubsession* subsession = (MediaSubsession*)clientData;
 	CustomRTSPClient* rtspClient = (CustomRTSPClient*)(subsession->miscPtr);
 	rtspClient->m_pLiveMediaModuleContext->subsessionByeHandler(rtspClient, subsession);
+}
+
+void CustomRTSPClient::streamCheckStreamInitializedHandler(void* clientData)
+{
+	((CustomRTSPClient*)clientData)->m_pLiveMediaModuleContext->streamCheckStreamInitializedHandler((CustomRTSPClient*)clientData);
 }
 
 void CustomRTSPClient::streamCheckAliveHandler(void* clientData)
@@ -569,18 +579,24 @@ LiveMediaModuleContext::LiveMediaModuleContext(int iVerbosityLevel)
 	m_pMediaSession = NULL;
 	m_pMediaSubsessionIterator = NULL;
 	m_pMediaSubsession = NULL;
+	m_streamInitializedTask = NULL;
 	m_streamTimerTask = NULL;
 	m_streamCheckAliveTask = NULL;
 	m_duration = 0;
 	m_bError = false;
 	timerclear(&m_tvLastPacket);
 	m_bWithPingOptions = true;
+
+	m_bStreamInitialized = false;
 }
 
 LiveMediaModuleContext::~LiveMediaModuleContext()
 {
 	cleanSesssion();
-	m_env->reclaim();
+	if(m_env) {
+		m_env->reclaim();
+		m_env = NULL;
+	}
 	if(m_scheduler){
 		delete m_scheduler;
 		m_scheduler = NULL;
@@ -609,13 +625,25 @@ void LiveMediaModuleContext::cleanSesssion()
 		m_pMediaSubsessionIterator = NULL;
 	}
 	if(m_pMediaSession){
-		m_env->taskScheduler().unscheduleDelayedTask(m_streamCheckAliveTask);
-		m_env->taskScheduler().unscheduleDelayedTask(m_streamTimerTask);
 		Medium::close(m_pMediaSession);
 		m_pMediaSession = NULL;
 	}
-	m_streamCheckAliveTask = NULL;
-	m_streamTimerTask = NULL;
+
+	if(m_streamTimerTask) {
+		m_env->taskScheduler().unscheduleDelayedTask(m_streamTimerTask);
+		m_streamTimerTask = NULL;
+	}
+
+	if(m_streamCheckAliveTask) {
+		m_env->taskScheduler().unscheduleDelayedTask(m_streamCheckAliveTask);
+		m_streamCheckAliveTask = NULL;
+	}
+
+	if(m_streamInitializedTask) {
+		m_env->taskScheduler().unscheduleDelayedTask(m_streamInitializedTask);
+		m_streamInitializedTask = NULL;
+	}
+
 	m_duration = 0;
 	timerclear(&m_tvLastPacket);
 }
@@ -832,6 +860,8 @@ void LiveMediaModuleContext::continueAfterPLAY(RTSPClient* rtspClient, int resul
 			m_streamTimerTask = m_env->taskScheduler().scheduleDelayedTask(uSecsToDelay, (TaskFunc*)CustomRTSPClient::streamTimerHandler, rtspClient);
 		}
 
+		m_bStreamInitialized = true;
+
 		if (m_duration > 0) {
 			p_log("[Access::livemedia] Started playing session (for up to %f seconds)", m_duration);
 		}else{
@@ -869,10 +899,25 @@ void LiveMediaModuleContext::subsessionByeHandler(RTSPClient* rtspClient, MediaS
 	subsessionAfterPlaying(rtspClient, subsession);
 }
 
+void LiveMediaModuleContext::streamCheckStreamInitializedHandler(CustomRTSPClient* rtspClient)
+{
+	if(!m_bStreamInitialized){
+		p_log("[Access::livemedia] Stream not initialized in %d ms", 30000);
+		m_streamInitializedTask = NULL;
+		// Shutdown the stream
+		shutdownStream(rtspClient);
+	}
+}
+
 void LiveMediaModuleContext::streamCheckAliveHandler(CustomRTSPClient* rtspClient)
 {
 	timeval tvNow;
 	gettimeofday(&tvNow, NULL);
+
+	if(m_streamCheckAliveTask) {
+		m_env->taskScheduler().unscheduleDelayedTask(m_streamCheckAliveTask);
+		m_streamCheckAliveTask = NULL;
+	}
 
 	int64_t iDiffMs = p_timeval_diffms(tvNow, m_tvLastPacket);
 	if(iDiffMs > 30000)
@@ -959,6 +1004,9 @@ int LiveMediaModuleContext::start(const char* szMRL, const char* szUser, const c
 		p_log("[Access::livemedia] Creating authenticator");
 
 		Authenticator* pAuth = new Authenticator(szUser, szPass);
+
+		m_bStreamInitialized = false;
+		m_streamInitializedTask = m_env->taskScheduler().scheduleDelayedTask(TIMEOUT_CHECKALIVE, (TaskFunc*)CustomRTSPClient::streamCheckStreamInitializedHandler, m_pRtspClient);
 
 		p_log("[Access::livemedia] Sending command OPTIONS");
 		m_pRtspClient->sendOptionsCommand(CustomRTSPClient::continueAfterOPTIONS, pAuth);
@@ -1048,12 +1096,18 @@ int main (int argc, char *argv[])
 	// Initiate context
 	while(true){
 		g_iAttempt++;
+		p_log(" ");
+		p_log("[Access::livemedia] Attempt %d for stream starting", g_iAttempt);
+		
 		LiveMediaModuleContext* pContext = new LiveMediaModuleContext(iVerbosityLevel);
 		pContext->setWithPingOptions(bWithPing);
 		pContext->start(szRTSPUrl, szUsername, szPassword, bTCP);
+		if(pContext){
+			delete pContext;
+			pContext = NULL;
+		}
 		if(!bRetry){
 			break;
 		}
 	}
 }
-
