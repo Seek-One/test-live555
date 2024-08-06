@@ -2,7 +2,7 @@ LIVE555_HOME=/opt/livemedia/
 
 all: TestLiveMedia
 
-TestLiveMedia: TestLiveMedia.o
+TestLiveMedia: TestLiveMedia.o ${LIVE555_HOME}/lib/libliveMedia.a ${LIVE555_HOME}/lib/libgroupsock.a ${LIVE555_HOME}/lib/libBasicUsageEnvironment.a ${LIVE555_HOME}/lib/libUsageEnvironment.a
 	g++ -o TestLiveMedia TestLiveMedia.o -L${LIVE555_HOME}/lib/ -l:libliveMedia.a -l:libgroupsock.a -l:libBasicUsageEnvironment.a -l:libUsageEnvironment.a `pkg-config --libs openssl`
 
 TestLiveMedia.o: TestLiveMedia.cpp
