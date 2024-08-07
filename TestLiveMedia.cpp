@@ -1044,6 +1044,7 @@ int main (int argc, char *argv[])
 	int iVerbosityLevel = 0;
 	bool bWithPing = true;
 	bool bRetry = false;
+	int iRetryDelay = 5;
 
 	for(int i=0; i<argc; i++)
 	{
@@ -1084,6 +1085,11 @@ int main (int argc, char *argv[])
 			bRetry = true;
 			continue;
 		}
+		if(strcmp(argv[i], "--retry-delay") == 0){
+			iRetryDelay = atoi(argv[i+1]);
+			i++;
+			continue;
+		}
 		if(i == argc-1){
 			szRTSPUrl = argv[i];
 		}
@@ -1108,6 +1114,10 @@ int main (int argc, char *argv[])
 		}
 		if(!bRetry){
 			break;
+		}
+		if(iRetryDelay>0){
+			p_log("[Access::livemedia] Pause for %d seconds before next attempt", iRetryDelay);
+			sleep(iRetryDelay);
 		}
 	}
 }
